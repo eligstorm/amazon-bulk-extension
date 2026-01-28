@@ -1,6 +1,10 @@
 document.getElementById('addButton').addEventListener('click', async () => {
-  const asinsInput = document.getElementById('asins').value;
-  const asins = asinsInput.split(/[\s,]+/).filter(Boolean).map(s => {
+  const urlsInput = document.getElementById('asins').value;
+  const asins = urlsInput.split(/[\s,]+/).filter(Boolean).map(s => {
+    // extract ASIN from URL
+    const m = s.match(/\/dp\/([A-Za-z0-9]{10})/);
+    return m ? m[1] : null;
+  }).filter(Boolean);
     // extract ASIN from URL or raw ASIN
     const m = s.match(/(?:dp\/)?([A-Za-z0-9]{10})$/);
     return m ? m[1] : s;
