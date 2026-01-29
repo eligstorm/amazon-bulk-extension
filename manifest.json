@@ -3,7 +3,8 @@
   "name": "Amazon Bulk Add to Cart",
   "version": "1.0.0",
   "description": "Add multiple ASINs to Amazon cart with one click.",
-  "permissions": ["scripting", "activeTab", "storage"],
+  "permissions": ["scripting", "activeTab", "storage", "tabs"],
+  "host_permissions": ["https://www.amazon.com/*"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
