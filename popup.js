@@ -31,6 +31,77 @@ async function waitForTabLoadComplete(tabId) {
   });
 }
 
+async function dismissProtectionModal(tabId) {
+  // Best-effort: Amazon sometimes shows an Asurion/protection plan side sheet.
+  // Clicking the backdrop or "No thanks" closes it and proceeds without protection.
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const norm = (s) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+        const clickIf = (el) => {
+          if (!el) return false;
+          try {
+            el.click();
+            return true;
+          } catch (_) {
+            return false;
+          }
+        };
+
+        // 1) Try explicit "No thanks" buttons/links.
+        const candidates = Array.from(document.querySelectorAll('button, a, input[type="button"], input[type="submit"]'));
+        for (const el of candidates) {
+          const text = norm(el.innerText || el.value || el.getAttribute('aria-label') || el.getAttribute('title'));
+          if (text === 'no thanks' || text === 'no, thanks' || text === 'no thanks,' || text === 'no thanks.' || text.includes('no thanks')) {
+            if (clickIf(el)) return { dismissed: true, method: 'no-thanks' };
+          }
+        }
+
+        // 2) Common close affordances.
+        const closeSelectors = [
+          '#attach-close_sideSheet-link',
+          'button[aria-label="Close"]',
+          'button[aria-label="close"]',
+          '.a-button-close',
+          '.a-popover-close',
+          '#a-popover-1 .a-popover-header .a-close-button'
+        ];
+        for (const sel of closeSelectors) {
+          const el = document.querySelector(sel);
+          if (clickIf(el)) return { dismissed: true, method: 'close-x' };
+        }
+
+        // 3) Click obvious backdrops/overlays.
+        const overlaySelectors = [
+          '.a-modal-overlay',
+          '.a-popover-overlay',
+          '#a-popover-lgtbox',
+          '.a-dimmer',
+          '.a-sheet-overlay'
+        ];
+        for (const sel of overlaySelectors) {
+          const el = document.querySelector(sel);
+          if (clickIf(el)) return { dismissed: true, method: 'backdrop' };
+        }
+
+        // 4) Last resort: click near the top-left corner of the page to try to hit the dimmed area.
+        // (Avoid clicking the side sheet itself.)
+        try {
+          const evt = new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 5, clientY: 5 });
+          document.elementFromPoint(5, 5)?.dispatchEvent(evt);
+          return { dismissed: true, method: 'corner-click' };
+        } catch (_) {
+          return { dismissed: false, method: 'none' };
+        }
+      }
+    });
+  } catch (e) {
+    // Ignore; this is best-effort.
+  }
+}
+
 async function openAddAndClose(asin) {
   const url = `https://www.amazon.com/dp/${asin}`;
 
@@ -54,7 +125,13 @@ async function openAddAndClose(asin) {
     });
 
     // Give Amazon a moment to process any add-to-cart navigation/requests.
-    await sleep(2000);
+    await sleep(1500);
+
+    // If Amazon shows the protection side sheet, dismiss it (no protection).
+    await dismissProtectionModal(tab.id);
+
+    // Give it another moment after dismissing.
+    await sleep(1000);
 
     // Close the tab when done.
     await chrome.tabs.remove(tab.id);
